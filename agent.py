@@ -198,6 +198,9 @@ class Agent:
 
             # yield response
             for chunk in stream:
+                if len(chunk.choices) == 0:
+                    continue
+
                 content_delta = chunk.choices[0].delta.content
                 if content_delta:
                     response_message += content_delta
@@ -287,3 +290,4 @@ class Agent:
     def load_conv(self, conv: list):
         self.clear_history()
         self.conversation_history.extend(conv)
+
