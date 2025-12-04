@@ -175,7 +175,6 @@ class Agent:
             self.clear_history()
 
         system_prompt = self.__format_system_prompt(dependency, self.llm_system_prompt).strip()
-        print(system_prompt)
         if system_prompt:
             self.conversation_history[0]["content"] = system_prompt
         self.__append_message(ConversationRoles.USER, prompt) 
@@ -290,4 +289,5 @@ class Agent:
     def load_conv(self, conv: list):
         self.clear_history()
         self.conversation_history.extend(conv)
+
 
