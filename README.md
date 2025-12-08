@@ -156,8 +156,8 @@ This project is primarily a proof-of-concept for building AI agents from scratch
 Key limitations include:
 - Basic error handling
 - Limited memory management capabilities
-- No asynchronous support
 - Minimal logging infrastructure
 - Static tool registration
+
 
 You are encouraged to adapt and extend the code according to your needs. The framework has been tested primarily with Gemini Flash and OpenRouter models; other OpenAI-compatible providers may require code adjustments.
