@@ -63,7 +63,6 @@ class Agent:
         }
 
         tool_schema = self.__extract_tool_schema(f)
-        print(tool_schema)
         self.tools_schema.append(tool_schema)
 
     def __extract_tool_schema(self, f):        
@@ -294,5 +293,6 @@ class Agent:
     def load_conv(self, conv: list):
         self.clear_history()
         self.conversation_history.extend(conv)
+
 
 
