@@ -1,4 +1,4 @@
-from typing import get_args, get_origin, Literal
+from typing import get_args, get_origin, Literal, Union
 from openai import OpenAI
 import inspect, json
 
@@ -63,57 +63,23 @@ class Agent:
         }
 
         tool_schema = self.__extract_tool_schema(f)
+        print(tool_schema)
         self.tools_schema.append(tool_schema)
 
-    def __extract_tool_schema(self, f):
-        type_map = {
-            "str": "string",
-            "int": "integer",
-            "float": "number",
-            "bool": "boolean",
-        }
-        
-        signature = inspect. signature(f)
+    def __extract_tool_schema(self, f):        
+        signature = inspect.signature(f)
         parameters = {}
         required = []
 
         for name, param in signature.parameters.items():
             if name == "ctx":
                 continue # skip context parameter in schema
+
+            param_schema = self._get_type_schema(param.annotation)
+            parameters[name] = param_schema
             
-            annotation = param.annotation
-            annotation_values = get_args(annotation)
-
-            param_schema = {}
-            # enums
-            if get_origin(annotation) is Literal:
-                param_schema["type"] = "string"
-                param_schema["enum"] = list(get_args(annotation))
-            # lists
-            elif get_origin(annotation) is list:
-                items_type = getattr(annotation_values[0], '__name__', str(annotation)).lower() if annotation_values else "string"
-                items_type = type_map.get(items_type, "string")
-
-                param_schema["type"] = "array"
-                param_schema["items"] = {"type": items_type}
-            # objects
-            elif get_origin(annotation) is dict:
-                annotation_values = get_args(annotation)
-                items_type = getattr(annotation_values[1], '__name__', str(annotation)).lower() if len(annotation_values) == 2 else "string"
-                items_type = type_map.get(items_type, "string")
-
-                param_schema["type"] = "object"
-                param_schema["additionalProperties"] = {"type": items_type}
-            elif annotation is not inspect.Parameter.empty:
-                param_type_name = getattr(annotation, '__name__', str(annotation)).lower()
-                param_schema["type"] = type_map.get(param_type_name, "string")
-            else:
-                param_schema["type"] = "string"
-
             if param.default is inspect.Parameter.empty:
                 required.append(name)
-            
-            parameters[name] = param_schema
 
         tool_schema = {
             "type": "function",
@@ -128,6 +94,45 @@ class Agent:
             },
         }
         return tool_schema
+
+    def _get_type_schema(self, annotation):
+        # handle None/empty annotation
+        if annotation is inspect.Parameter.empty or annotation is None:
+            return {"type": "string"}
+        
+        # handle Union types (including Optional)
+        if get_origin(annotation) is Union:
+            args = get_args(annotation)
+            # Optional[T] is Union[T, None]
+            if len(args) == 2 and type(None) in args:
+                non_none_type = next(arg for arg in args if arg is not type(None))
+                return self._get_type_schema(non_none_type)
+            # For other unions, use the first type
+            return self._get_type_schema(args[0])
+        
+        # handle Literal enums
+        if get_origin(annotation) is Literal:
+            return {"type": "string", "enum": list(get_args(annotation))}
+        
+        # handle lists
+        if get_origin(annotation) is list:
+            args = get_args(annotation)
+            item_schema = self._get_type_schema(args[0]) if args else {"type": "string"}
+            return {"type": "array", "items": item_schema}
+        
+        # handle dicts
+        if get_origin(annotation) is dict:
+            args = get_args(annotation)
+            value_schema = self._get_type_schema(args[1]) if len(args) > 1 else {"type": "string"}
+            return {"type": "object", "additionalProperties": value_schema}
+        
+        type_map = {
+            str: "string", 
+            int: "integer", 
+            float: "number", 
+            bool: "boolean"
+        }
+        return {"type": type_map.get(annotation, "string")}
 
     def tool(self):
         def wrapper(f):
