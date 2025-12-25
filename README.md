@@ -1,7 +1,7 @@
-# Tiny Agent Framework
+# Tiny Agent Framework (TAF)
 
 ## Overview
-A lightweight AI agent framework featuring tool calling, streaming responses, and hooks. Designed for simplicity and flexibility.
+A lightweight AI agent framework featuring tool calling, streaming responses, hooks and skills. Designed for simplicity and flexibility.
 
 The framework operates through iterative (reAct) problem-solving by calling available tools. When no further tools are needed, it returns the final response.
 
@@ -12,26 +12,22 @@ The framework operates through iterative (reAct) problem-solving by calling avai
 - Dependency injection through tools and hooks
 - Conversation history management
 - Streaming response support
+- [Skills](https://agentskills.io/)
 
 ## Quick Example
 
 ```python
-from agent import Agent
+import asyncio
 from datetime import datetime
+from taf.agent import Agent
 
 SYSTEM_PROMPT = """
-You are a helpful AI assistant. 
+You are a helpful AI assistant.
 """
 
-def read_file(file_path: str) -> str:
+async def read_file(file_path: str) -> str:
     """
     Reads and returns the contents of a file at the given file path.
-    
-    Args:
-        file_path (str): The path to the file to read
-        
-    Returns:
-        str: The file contents if successful, or an error message if the operation fails
     """
     try:
         with open(file_path, "r") as file:
@@ -39,53 +35,56 @@ def read_file(file_path: str) -> str:
     except Exception as exc:
         return f"Error reading file: {exc}"
 
-# Initialize the agent with Gemini model configuration
+
 agent = Agent(
     model="gemini-2.5-flash",
     system_prompt=SYSTEM_PROMPT,
     api_key="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    tools=[read_file]  # Pre-register read_file as a tool
+    tools=[read_file],  # Pre-register read_file as a tool
 )
 
+
 @agent.tool()
-def write_file(file_path: str, content: str) -> str:
+async def write_file(file_path: str, content: str) -> str:
     """
     Writes content to a file at the specified file path.
-    
-    Args:
-        file_path (str): The path where the file will be created/overwritten
-        content (str): The content to write into the file
-        
-    Returns:
-        str: Success message if writing succeeds, or an error message if it fails
     """
     try:
         with open(file_path, "w") as file:
             file.write(content)
-            return f"Successfully wrote {len(content)} characters to {file_path}"
+        return f"Successfully wrote {len(content)} characters to {file_path}"
     except Exception as exc:
         return f"Error writing to file: {exc}"
-    
+
+
 @agent.system_prompt()
-def get_current_datetime():
+async def get_current_datetime():
+    """
+    Injects the current datetime into the system prompt.
+    """
     now = datetime.now()
-    # This will be appended to the system prompt
-    # every time run_stream() is called
     return f"Current datetime: {now.isoformat()}"
 
-if __name__ == "__main__":
+
+async def main():
     prompt = "Write a Python function that outputs 'hello world' inside a file named script.py"
-    
+
     print("Agent response:")
-    for chunk in agent.run_stream(prompt):
-        print(chunk, end="", flush=True)
+    async for chunk in agent.run_stream(prompt):
+        if chunk["type"] in ("reasoning", "response"):
+            print(chunk["content"], end="", flush=True)
+    print()
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
 
 ## Example using Dependency Injection
 ```python
-from agent import Agent
+import asyncio
 from dataclasses import dataclass
+from taf.agent import Agent
 
 @dataclass
 class UserData:
@@ -98,9 +97,10 @@ agent = Agent(
     model="gpt-4",
     system_prompt="You are a helpful AI assistant that personalizes responses based on user context.",
 )
-    
+
+
 @agent.system_prompt()
-def get_current_user_information(ctx: UserData) -> str:
+async def get_current_user_information(ctx: UserData) -> str:
     """
     Injects current user information into the system prompt.
     """
@@ -112,18 +112,23 @@ Current User Context:
 - Session ID: {ctx.session_id}
 
 Please tailor your responses to this user's context and speak in their preferred language when appropriate.
-"""
+""".strip()
+
 
 @agent.tool()
-def get_user_orders(ctx: UserData, status_filter: str = "all") -> str:
+async def get_user_orders(ctx: UserData, status_filter: str = "all") -> str:
     """
     Retrieves user's orders filtered by status.
     """
     # In a real application, this would query a database
-    return f"Retrieved {status_filter} orders for user {ctx.name} (ID: {ctx.id}): [Order1, Order2, Order3]"
+    return (
+        f"Retrieved {status_filter} orders for user {ctx.name} "
+        f"(ID: {ctx.id}): [Order1, Order2, Order3]"
+    )
+
 
 @agent.tool()
-def get_user_preferences(ctx: UserData) -> str:
+async def get_user_preferences(ctx: UserData) -> str:
     """
     Gets the current user's preferences and settings.
     """
@@ -133,22 +138,90 @@ User Preferences for {ctx.name}:
 - Theme: Dark mode
 - Notifications: Enabled
 - Timezone: America/Sao_Paulo
-"""
+""".strip()
 
-if __name__ == "__main__":
+
+async def main():
     user_context = UserData(
         id=1,
         name="Lucas",
-        language="Brazilian Portuguese", 
-        session_id="sess_abc123xyz"
+        language="Brazilian Portuguese",
+        session_id="sess_abc123xyz",
     )
-    
+
     prompt = "What do you know about me and can you show my recent orders?"
     print("Agent: ", end="")
-    for chunk in agent.run_stream(prompt, dependency=user_context):
-        print(chunk, end="", flush=True)
+
+    async for chunk in agent.run_stream(prompt, dependency=user_context):
+        if chunk["type"] in ("reasoning", "response"):
+            print(chunk["content"], end="", flush=True)
     print("\n")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 ```
+
+## Example using [Skills](https://agentskills.io/) (new)
+Skills are installable units of knowledge that package task-specific instructions (SKILL.md) with optional supporting resources, loaded on demand to guide agent behavior while remaining **token-efficient**
+
+Directory structure:
+```
+.skills/
+├─ code-review/
+│  └─ SKILL.md
+└─ document-processing/
+   ├─ references/
+   │  ├─ CSV.md
+   │  ├─ DOCX.md
+   │  ├─ PDF.md
+   │  └─ XLSX.md
+   ├─ scripts/
+   │  ├─ convert_document_to_image.sh
+   │  └─ remove_images.py
+   └─ SKILL.md
+```
+
+Code example:
+```py
+from taf import Agent, Skill
+import asyncio
+
+skills = Skill.from_folder(".skills")
+print(f"{len(skills)} Skills loaded!")
+
+agent = Agent(
+    name="Skilled Agent",
+    system_prompt=SYSTEM_PROMPT,
+    model="",
+    skills=skills
+)
+
+@agent.system_prompt()
+def list_skills():
+    content = "\n\n".join([f"Name: {i.name}\nDescription: {i.description}" for i in skills])
+    return f"""
+<available_skills>
+{content}
+</available_skills>
+""".strip()
+
+async def main():
+    while True:
+        prompt = input(">> ")
+        async for chunk in agent.run_stream(prompt):
+            if chunk["type"] in ("reasoning", "response"):
+                print(i["content"], end="", flush=True)
+        print()
+
+asyncio.run(main())
+```
+
+### ⚠️ How Skills work under the hood:
+- When skills are provided, a tool named `skill` is automatically added to the agent's toolset.
+- Skills must be declared in the system prompt, so the model can discover them. If a skill is not listed the agent will not be aware of its existence.
+- Skills are optional and replaceable. You can implement equivalent behaviour using tools, prompts or dynamic system prompt hooks without using the `Skill` class.
+- For best results, include clear instructions in the system prompt that explain when and how the model should load and use skills.
 
 ## Disclaimer ⚠️
 This project is primarily a proof-of-concept for building AI agents from scratch using Python and the OpenAI-compatible API. While functional, it may not be suitable for production environments without modifications.
