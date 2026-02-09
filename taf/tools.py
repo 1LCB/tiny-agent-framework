@@ -3,7 +3,7 @@ from typing import get_args, get_origin, Literal, Union
 
 class ToolUtils:
     @classmethod
-    def function_to_openai_schema(cls, function):
+    def function_to_openai_schema(cls, function, *, strict: bool = False):
         signature = inspect.signature(function)
         parameters = {}
         required = []
@@ -15,21 +15,30 @@ class ToolUtils:
             param_schema = cls._get_type_schema(param.annotation)
             parameters[name] = param_schema
             
-            if param.default is inspect.Parameter.empty:
+            if strict or param.default is inspect.Parameter.empty:
                 required.append(name)
+
+        params_schema = {
+            "type": "object",
+            "properties": parameters,
+            "required": required,
+        }
+
+        if strict:
+            params_schema["additionalProperties"] = False
 
         tool_schema = {
             "type": "function",
             "function": {
                 "name": function.__name__,
                 "description": inspect.getdoc(function),
-                "parameters": {
-                    "type": "object",
-                    "properties": parameters,
-                    "required": required,
-                },
+                "parameters": params_schema,
             },
         }
+
+        if strict:
+            tool_schema["function"]["strict"] = True
+
         return tool_schema
 
     @classmethod

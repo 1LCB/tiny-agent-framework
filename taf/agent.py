@@ -37,13 +37,13 @@ class Agent:
     def __repr__(self):
         return f"<Agent name={self.name}, model={self.model}>"
 
-    def __add_available_tool(self, function):
+    def __add_available_tool(self, function, strict: bool = False):
         self.__tool_mapping[function.__name__] = {
             "func": function,
             "hasContext": ToolUtils.has_ctx_parameter(function),
         }
 
-        tool_schema = ToolUtils.function_to_openai_schema(function)
+        tool_schema = ToolUtils.function_to_openai_schema(function, strict=strict)
         self.__tool_schemas.append(tool_schema)
 
     def __setup_skills(self, skills: list[Skill]):
@@ -88,9 +88,9 @@ class Agent:
 
         self.__add_available_tool(skill)
 
-    def tool(self):
+    def tool(self, *, strict: bool = False):
         def wrapper(f):
-            self.__add_available_tool(f)
+            self.__add_available_tool(f, strict)
             return f
         return wrapper
 
@@ -117,7 +117,7 @@ class Agent:
         system_prompt = (await self.__format_system_prompt(dependency, self.__llm_system_prompt)).strip()
         if system_prompt:
             self.__conversation_history[0]["content"] = system_prompt
-        self.__append_message(ConversationRoles.USER, prompt) 
+        self.__append_message(ConversationRoles.USER, prompt)
 
         for step in range(max_steps):
             response_message = ""
