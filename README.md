@@ -162,6 +162,61 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
+## Example using Hooks
+Hooks allow you to intercept and respond to various lifecycle events during agent execution. All hook functions must include the `metadata` parameter to receive event-specific data, and can optionally include `ctx` to access the dependency injection context.
+
+Available hook types:
+- `ON_USER_PROMPT` - Triggered when user submits a prompt
+- `ON_AGENT_STEP` - Called at each reasoning step
+- `ON_TOOL_CALL` - Before tool execution
+- `ON_TOOL_CALL_RESULT` - After tool execution
+- `ON_AGENT_FINAL_RESPONSE` - When agent provides final answer
+- `SYSTEM_PROMPT` - Augments the system prompt dynamically
+
+```python
+import asyncio
+from taf.agent import Agent
+from taf.constants import HookTypes
+
+agent = Agent(
+    name="Agent",
+    model="gpt-4",
+    system_prompt="You are a helpful assistant.",
+)
+
+
+@agent.hook(HookTypes.ON_TOOL_CALL)
+def on_tool_call(metadata: dict):
+    """Called before any tool is executed."""
+    print(f"About to call tool: {metadata['tool_name']}")
+    print(f"With arguments: {metadata['tool_args']}")
+
+
+@agent.hook(HookTypes.ON_TOOL_CALL_RESULT)
+def on_tool_result(metadata: dict):
+    """Called after tool execution completes."""
+    print(f"Tool {metadata['tool_name']} returned: {metadata['result']}")
+
+
+@agent.hook(HookTypes.ON_AGENT_FINAL_RESPONSE)
+def on_final_response(metadata: dict):
+    """Called when agent provides its final answer."""
+    print(f"Final response at step {metadata['step']}: {metadata['final_response']}")
+
+
+@agent.hook(HookTypes.ON_USER_PROMPT)
+def on_user_prompt(metadata: dict, ctx=None):
+    """
+    Called when user submits a prompt.
+    Can access both metadata and dependency injection context.
+    """
+    print(f"User prompt: {metadata['prompt']}")
+    if ctx:
+        print(f"Context: {ctx}")
+```
+
+**Note:** Hook functions automatically receive only the parameters they declare. If your hook needs event data, include `metadata: dict`. If it needs dependency injection, include `ctx`. Both parameters are optional and will be filtered based on your function signature.
+
 ## Example using [Skills](https://agentskills.io/) (new)
 Skills are installable units of knowledge that package task-specific instructions (SKILL.md) with optional supporting resources, loaded on demand to guide agent behavior while remaining **token-efficient**
 

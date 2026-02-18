@@ -106,7 +106,6 @@ class Agent:
             return f
         return wrapper
 
-
     async def run_stream(
         self, 
         prompt: str, 
@@ -114,12 +113,16 @@ class Agent:
         max_steps: int = 30,
         **kwargs
     ) -> AsyncGenerator[AgentChunkResponse, None]:
+        await self.__call_hook(hook_type=HookTypes.ON_USER_PROMPT, ctx=dependency, metadata={"prompt": prompt})
+
         system_prompt = (await self.__format_system_prompt(dependency, self.__llm_system_prompt)).strip()
         if system_prompt:
             self.__conversation_history[0]["content"] = system_prompt
         self.__append_message(ConversationRoles.USER, prompt)
 
         for step in range(max_steps):
+            await self.__call_hook(hook_type=HookTypes.ON_AGENT_STEP, ctx=dependency, metadata={"prompt": prompt, "current_step": step})
+
             response_message = ""
             tool_calls_aggregator: list[ChoiceDeltaToolCall] = []
 
@@ -147,6 +150,7 @@ class Agent:
 
             self.__append_message(ConversationRoles.ASSISTANT, response_message, tool_calls_aggregator)
             if not tool_calls_aggregator:
+                await self.__call_hook(HookTypes.ON_AGENT_FINAL_RESPONSE, ctx=dependency, metadata={"prompt": prompt, "step": step, "final_response": response_message})
                 break # final answer
 
             async for tool_calls in self.__handle_tool_calls(dependency, tool_calls_aggregator):
@@ -161,8 +165,10 @@ class Agent:
             meta = {"tool_name": tool_name, "tool_args": tool_args, "tool_id": tool_id}
             yield AgentChunkResponse(origin=self.name, content=None, metadata=meta, type="tool_call")
 
+            await self.__call_hook(HookTypes.ON_TOOL_CALL, ctx=dependency, metadata=meta)
             output = await self.__execute_func(tool_name, tool_args, dependency)
 
+            await self.__call_hook(HookTypes.ON_TOOL_CALL_RESULT, ctx=dependency, metadata=dict(**meta, result=output))
             yield AgentChunkResponse(origin=self.name, content=output, metadata=meta, type="tool_call_result")
 
             self.__conversation_history.append({
@@ -176,6 +182,10 @@ class Agent:
         hook = self.hooks.get(hook_type)
         if not hook:
             return None
+
+        if "metadata" in params:
+            params["metadata"].update({"agent": self.name})
+
         return await hook.call(**params)
 
     async def __format_system_prompt(self, dependency, base_prompt: str):
