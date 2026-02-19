@@ -217,6 +217,41 @@ def on_user_prompt(metadata: dict, ctx=None):
 
 **Note:** Hook functions automatically receive only the parameters they declare. If your hook needs event data, include `metadata: dict`. If it needs dependency injection, include `ctx`. Both parameters are optional and will be filtered based on your function signature.
 
+## Example using Agent Chains
+Chain multiple agents together where each agent's output becomes input for the next. Agents can query previous agents in the chain using the automatically provided `ask_previous_agent` tool.
+
+```python
+import asyncio
+from taf import Agent, AgentChain
+
+researcher = Agent(
+    name="Researcher",
+    model="gpt-4",
+    system_prompt="You are a research assistant that gathers information.",
+)
+
+writer = Agent(
+    name="Writer", 
+    model="gpt-4",
+    system_prompt="You are a content writer that creates engaging articles.",
+)
+
+async def main():
+    chain = AgentChain()
+    result = await (
+        chain
+        .next(researcher, "Research the benefits of async programming in Python")
+        .next(writer, "Write a short blog post based on the research")
+        .result()
+    )
+
+    print(result)
+
+asyncio.run(main())
+```
+
+The second agent automatically receives the first agent's output and can call `ask_previous_agent(question: str)` to request clarification while maintaining full conversation context.
+
 ## Example using [Skills](https://agentskills.io/) (new)
 Skills are installable units of knowledge that package task-specific instructions (SKILL.md) with optional supporting resources, loaded on demand to guide agent behavior while remaining **token-efficient**
 
