@@ -223,7 +223,7 @@ class Agent:
             stream=True,
             stream_options={"include_usage": True},
             tools=self.__tool_schemas if self.__tool_schemas else None,
-            tool_choice="auto" if self.__tool_schemas else None,
+            tool_choice="auto" if self.__tool_schemas else "none",
             n=1,
             **kwargs,
         )

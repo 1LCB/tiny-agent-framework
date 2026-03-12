@@ -77,7 +77,8 @@ class ToolUtils:
             str: "string",
             int: "integer",
             float: "number",
-            bool: "boolean"
+            bool: "boolean",
+            dict: "object",
         }
         return {"type": type_map.get(annotation, "string")}
 
