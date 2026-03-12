@@ -106,6 +106,19 @@ class Agent:
             return f
         return wrapper
 
+    async def structured_output(self, prompt, pydantic_class, custom_system_prompt: str | None = None) -> str | None:
+        response = await self.__openai_client.chat.completions.parse(
+            n=1,
+            model=self.model,
+            temperature=self.temperature,
+            response_format=pydantic_class,
+            messages=[
+                {"role": "system", "content": custom_system_prompt or self.__llm_system_prompt},
+                {"role": "user", "content": prompt}
+            ],
+        )
+        return response.choices[0].message.content
+
     async def run_stream(
         self, 
         prompt: str, 
